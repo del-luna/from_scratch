@@ -19,18 +19,16 @@ class Function:
     def foward(self, x):
         raise NotImplementedError()
 
-'''
-#Example.1
-data = np.array(1.0)
-x = Variable(data) # Variable instance, x is not data, just box!
-print(x)
+class Square(Function):
+    def foward(self, x):
+        return x ** 2
 
-x.data = np.array(2.0) #input new data
-print(x)
-'''
 
+#Example.2
 x = Variable(np.array(10))
-f = Function()
+f = Square()
 y = f(x)
 print(type(y))
 print(y.data)
+
+
