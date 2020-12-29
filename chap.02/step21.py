@@ -15,10 +15,21 @@ def using_config(name, value):
 def no_grad():
     return using_config('enable_backprop', False)
 
+def as_array(x):
+    if np.isscalar(x):
+        return np.array(x)
+    return x
+
+def as_variable(obj):
+    if isinstance(obj, Variable):
+        return obj
+    return Variable(obj)
+
 class Config:
     enable_backprop = True
 
 class Variable:
+    __array_priority__ = 200 #operator priority
     def __init__(self, data, name=None):
         if data is not None:
             if not isinstance(data, np.ndarray):
@@ -54,12 +65,6 @@ class Variable:
             return 'variable(None)'
         p = str(self.data).replace('\n', '\n' + ' ' * 9)
         return 'variable(' + p + ')'
-
-    def __add__(self, other):
-        return add(self, other)
-
-    def __mul__(self, other):
-        return mul(self, other)
     
     def cleargrad(self):
         self.grad = None
@@ -116,6 +121,7 @@ class Function:
     specific functions are implemented in the inherited class
     '''
     def __call__(self, *inputs): 
+        inputs = [as_variable(x) for x in inputs]
         xs = [x.data for x in inputs]
         ys = self.foward(*xs)
         if not isinstance(ys, tuple):
@@ -135,17 +141,6 @@ class Function:
 
     def backward(self, gys):
         raise NotImplementedError()
-
-class Add(Function):
-    def foward(self, x0, x1):
-        y = x0 + x1
-        return (y,)
-    
-    def backward(self, gy):
-        return gy, gy
-
-def add(x0, x1):
-    return Add()(x0, x1)
 
 class Square(Function):
     def foward(self, x):
@@ -173,17 +168,24 @@ class Exp(Function):
 def exp(x):
     return Exp()(x)
 
-def as_array(x):
-    if np.isscalar(x):
-        return np.array(x)
-    return x
-
 def numerical_diff(f, x, eps=1e-4):
     x0 = Variable(x.data - eps) #x-h
     x1 = Variable(x.data + eps) #x+h
     y0 = f(x0) #f(x-h)
     y1 = f(x1) #f(x+h)
     return (y1.data - y0.data) / (2 * eps) # f(x+h)-f(x-h)/2h
+
+class Add(Function):
+    def foward(self, x0, x1):
+        y = x0 + x1
+        return (y,)
+    
+    def backward(self, gy):
+        return gy, gy
+
+def add(x0, x1):
+    x1 = as_array(x1)
+    return Add()(x0, x1)
 
 class Mul(Function):
     def foward(self, x0, x1):
@@ -195,15 +197,14 @@ class Mul(Function):
         return gy * x1, gy * x0
 
 def mul(x0, x1):
+    x1 = as_array(x1)
     return Mul()(x0, x1)
 
-a = Variable(np.array(3.0))
-b = Variable(np.array(2.0))
-c = Variable(np.array(1.0))
+Variable.__add__ = add
+Variable.__radd__ = add
+Variable.__mul__ = mul
+Variable.__rmul__ = mul
 
-y = a * b + c
-y.backward()
-
+x = Variable(np.array([1.0]))
+y = np.array([2.0]) + x
 print(y)
-print(a.grad)
-print(b.grad)
